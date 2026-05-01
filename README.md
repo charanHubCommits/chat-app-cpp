@@ -8,8 +8,8 @@ A simple terminal-based client-server chat application using **C++ POSIX sockets
 *   **Dynamic Resolution**: Uses `getaddrinfo` for flexible host and port lookups.
 
 ## Project Structure
-*   `server.cpp`: Handles incoming connections and prints received messages.
-*   `client.cpp`: Connects to a specified server and sends user-input messages.
+*   `Server.cpp`: Handles incoming connections and prints received messages.
+*   `clientSocket.cpp`: Connects to a specified server and sends user-input messages.
 
 ## How to Build
 Ensure you are on a Linux/Unix-based system with `g++` installed.
@@ -43,6 +43,5 @@ Ensure you are on a Linux/Unix-based system with `g++` installed.
 *   **Compiler**: GCC/G++ or Clang.
 
 ## Future Improvements
-*  [ ] Support for multiple simultaneous clients using `poll()` or threading.
 *  [ ] Implement a two-way chat interface.
 *  [ ] Add data encryption for secure communication.
