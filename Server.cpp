@@ -8,6 +8,7 @@
 #include<netdb.h>
 #include<poll.h>
 #include<vector>
+#include<unordered_map>
 
 #define PORT "4000"
 #define MAX_CLIENTS 20
@@ -15,9 +16,10 @@
 class Server {
 	private:
 		int serverFd = -1,bindStatus = 0;
-		struct addrinfo *res;
+		struct addrinfo *res = nullptr;
 		std::vector<struct pollfd> pfds;
 		std::vector<int> clientFds;
+		std::unordered_map<std::string ,int> clientMp;
 	public:
 		Server() {
 			struct addrinfo hints;
@@ -33,7 +35,7 @@ class Server {
 				return;
 			}
 
-			serverFd = socket(AF_INET,SOCK_STREAM,0);
+			serverFd = socket(res->ai_family,res->ai_socktype,res->ai_protocol);
 
 			if(serverFd<0) {
 				std::cout << "Socket creation failed!" << std::endl;
@@ -41,6 +43,8 @@ class Server {
 				return;
 
 			}
+			int opt = 1;
+			setsockopt(serverFd,SOL_SOCKET,SO_REUSEADDR,&opt,sizeof(opt));
 			
 			bindStatus = bind(serverFd,res->ai_addr,res->ai_addrlen);
 
@@ -105,6 +109,30 @@ class Server {
 							pfds[i].revents = 0;
 
 							std::cout<<"New client connected" << std::endl;
+							char username[20];
+							ssize_t n = recv(clientFd,username,sizeof(username)-1,0);
+							if(n<=0) {
+								close(clientFd);
+								continue;
+							}
+							username[n] = '\0';
+							std::string name(username);
+							while(clientMp.find(name)!=clientMp.end()) {
+								std::string warn = "Username already exists!\nEnter another username: ";
+								send(clientFd,warn.c_str(),warn.size(),0);
+								memset(username,0,sizeof(username)-1);
+
+							 	n = recv(clientFd,username,sizeof(username)-1,0);
+								if(n<=0) {
+									close(clientFd);
+									continue;
+								}
+								name = std::string(username);
+							}
+
+
+							clientMp[name] = clientFd;
+							std::cout << "New user added " << name <<" " << clientFd << std::endl;
 							break;
 						}
 					}
@@ -122,14 +150,47 @@ class Server {
 					if(pfds[i].revents & (POLLIN | POLLERR | POLLHUP)) {
 						char buffer[1024];
 
-						ssize_t bytesRecieved = recv(pfds[i].fd,buffer,sizeof(buffer)-1,0);
+						ssize_t bytesReceived = recv(pfds[i].fd,buffer,sizeof(buffer)-1,0);
 
-						if(bytesRecieved > 0) {
-							buffer[bytesRecieved] = '\0';
+						if(bytesReceived > 0) {
+							buffer[bytesReceived] = '\0';
 
 							std::string msg(buffer);
 							std::cout << "User sent " << msg << std::endl;
+							size_t nameIndex = msg.find(" ");
+							size_t senderIndex = msg.find(":");
 
+							if(nameIndex == std::string::npos || senderIndex == std::string::npos) {
+   								std::string err = "Invalid format";
+    								send(pfds[i].fd,err.c_str(),err.size(),0);
+    								continue;
+							}
+							std::string ack = "msg sent";
+							send(pfds[i].fd,ack.c_str(),ack.size(),0);
+							std::string receiverName = msg.substr(0,nameIndex);
+							std::string receiverMsg = msg.substr(nameIndex+1,senderIndex-nameIndex-1);
+							if(clientMp.find(receiverName) != clientMp.end()) {
+								std::string sender = msg.substr(senderIndex+1);
+								std::string finalMsg = sender+": "+ receiverMsg;
+								send(clientMp[receiverName],finalMsg.c_str(),finalMsg.size(),0);
+							}
+							else {
+								std::string err = "user not found";
+								send(pfds[i].fd,err.c_str(),err.size(),0);
+							}
+						}else if(bytesReceived <= 0) {
+							close(pfds[i].fd);
+							for(auto it = clientMp.begin(); it != clientMp.end(); ) {
+    								if(it->second == pfds[i].fd) {
+        								it = clientMp.erase(it);
+    								} else {
+        								++it;
+    								}
+							}
+
+							pfds[i].fd = -1;
+
+							continue;
 						}
 					}
 				}
@@ -141,6 +202,12 @@ class Server {
 			freeaddrinfo(res);
 			if(serverFd >=0) {
 				close(serverFd);
+			}
+
+			for(int i=1;i<pfds.size();i++) {
+				if(pfds[i].fd!=-1) {
+					close(pfds[i].fd);
+				}
 			}
 		}
 };
