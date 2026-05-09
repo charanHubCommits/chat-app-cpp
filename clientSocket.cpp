@@ -6,13 +6,15 @@
 #include<cstring>
 #include<unistd.h>
 #include<netdb.h>
+#include<thread>
 
 class Client {
 	private:
 	int sockFd;
 	struct addrinfo *res;
+	std::string username;
 	public:
-	Client(const char* ip,const char* port):sockFd(-1), res(nullptr) {
+	Client(const char* ip,const char* port):sockFd(-1), res(nullptr),username("unknown") {
 		struct addrinfo hints;
 
 		memset(&hints,0,sizeof hints);
@@ -49,31 +51,53 @@ class Client {
 			return;
 		}
 
-		std::cout << "Connected successfully" << std::endl;
-		std::cout << "Enter 'end_session' to end this session" << std::endl;
+		std::cout << "Connected successfully\nSet a username" << std::endl;
 
-		std::cout << "Enter a msg to send to server" << std::endl;
+		std::getline(std::cin,username);	
+		send(sockFd,username.c_str(),username.size(),0);
+		std::cout << "Enter 'end_session' to end this session\nEnter username and msg in format: ";
+		std::cout << "<username> <message> to send a msg" << std::endl;	
+			
+		std::thread recvThread(&Client::receiveMsg,this);
+		
+		std::string msg;
 
-		while(1) {
-			std::string msg;
-			std::getline(std::cin,msg);
+		while(true) {
+    			std::getline(std::cin,msg);
 
-			if(msg=="end_session") break;
-			int len = msg.size();
+    			if(msg == "end_session") {
+       				 break;
+   			 }
+			msg+=":"+username;
 
-			int sentBytes = send(sockFd,msg.c_str(),len,0);
+    			ssize_t sent = send(sockFd,msg.c_str(),msg.size(),0);
 
-			char* buffer;
-			int peekRes = recv(sockFd,buffer,1,MSG_PEEK);
+    			if(sent <= 0) {
+        			std::cout << "Failed to send\n";
+        			break;
+   			}
+		}
+		shutdown(sockFd,SHUT_RDWR);
+		recvThread.join();
+	}
 
-			if(sentBytes <= 0 || peekRes==0) {
-				std::cout << "Server closed!" << std::endl;
+	void receiveMsg() {
+		char buffer[1024];
+
+		while(true){
+			ssize_t n = recv(sockFd,buffer,sizeof(buffer),0);
+			if(n<=0) {
+				std::cout << "Disconnected from Server!\n";
 				break;
 			}
-		}	
+			buffer[n]= '\0';
+			std::cout << buffer << std::endl; 
+
+		}
 	}
 
 	~Client() {
+		std::cout << "Connection closed!" <<std::endl;
 		if(sockFd!=-1)
 			close(sockFd);
 		if(res!=nullptr)
@@ -93,7 +117,6 @@ int main(int argc,char **argv) {
 
 	user.chat();
 			
-	
 	return 0;
 }
 
