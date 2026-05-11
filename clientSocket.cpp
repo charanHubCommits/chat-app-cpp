@@ -7,6 +7,7 @@
 #include<unistd.h>
 #include<netdb.h>
 #include<thread>
+#include<chrono>
 
 class Client {
 	private:
@@ -68,15 +69,29 @@ class Client {
     			if(msg == "end_session") {
        				 break;
    			 }
-			msg+=":"+username;
+			if(msg.find(" ")!=std::string::npos) {
+				auto time = std::chrono::system_clock::now();
+				auto time_t = std::chrono::system_clock::to_time_t(time);
+				std::string timeStamp = (std::string)ctime(&time_t);
+				timeStamp.pop_back(); //removing \n
 
-    			ssize_t sent = send(sockFd,msg.c_str(),msg.size(),0);
+				int receiverIndex = msg.find(" ");
+				std::string receiver = msg.substr(0,receiverIndex);
+				std::string finalMsg = msg.substr(receiverIndex+1);
+				
+				std::string packet = username+"|"+receiver+"|"+finalMsg+"|"+timeStamp;
 
-    			if(sent <= 0) {
-        			std::cout << "Failed to send\n";
-        			break;
-   			}
-		}
+				ssize_t sent = send(sockFd,packet.c_str(),packet.size(),0);
+
+    				if(sent <= 0) {
+        				std::cout << "Failed to send\n";
+        				break;
+   				}
+				continue;
+			}
+			
+			std::cout << "Enter valid message format!" << std::endl;
+    		}
 		shutdown(sockFd,SHUT_RDWR);
 		recvThread.join();
 	}
