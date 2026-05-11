@@ -28,7 +28,7 @@ Terminal-based multi-client chat built with C++ and POSIX sockets. A small TCP s
 | Client A  | <----> | poll()-based   | <----> | Client B  |
 | thread RX |        | TCP Server     |        | thread RX |
 +-----------+        +----------------+        +-----------+
-
+```
 ## Features
 
 - TCP (`AF_INET`, `SOCK_STREAM`) with `getaddrinfo` for address resolution.
