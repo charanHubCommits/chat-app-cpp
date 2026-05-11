@@ -67,6 +67,23 @@ class Server {
 			}
 		}
 
+		void getPacketDetails(const std::string &packet,std::array<std::string,4> &packetDetails) {
+			size_t senderIndex = packet.find("|");
+			std::string sender = packet.substr(0,senderIndex);
+			std::string remainingPacket = packet.substr(senderIndex+1);
+							
+			size_t receiverIndex = remainingPacket.find("|");	
+			std::string receiver = remainingPacket.substr(0,receiverIndex);
+			remainingPacket = remainingPacket.substr(receiverIndex+1);
+			
+			size_t msgIndex = remainingPacket.find("|");
+			std::string message = remainingPacket.substr(0,msgIndex);
+
+			std::string timeStamp = remainingPacket.substr(msgIndex+1);
+
+			packetDetails = {sender,receiver,message,timeStamp};
+		}
+
 		void run() {
 			if(serverFd < 0 || bindStatus < 0) {
 				std::cout << "Server not available!" << std::endl;
@@ -148,31 +165,32 @@ class Server {
 					if(pfds[i].fd==-1) continue;
 
 					if(pfds[i].revents & (POLLIN | POLLERR | POLLHUP)) {
-						char buffer[1024];
+						char buffer[2048];
 
 						ssize_t bytesReceived = recv(pfds[i].fd,buffer,sizeof(buffer)-1,0);
 
 						if(bytesReceived > 0) {
 							buffer[bytesReceived] = '\0';
 
-							std::string msg(buffer);
-							std::cout << "User sent " << msg << std::endl;
-							size_t nameIndex = msg.find(" ");
-							size_t senderIndex = msg.find(":");
+							std::string packet(buffer);
+							std::cout << "User sent " << packet << std::endl;
 
-							if(nameIndex == std::string::npos || senderIndex == std::string::npos) {
-   								std::string err = "Invalid format";
-    								send(pfds[i].fd,err.c_str(),err.size(),0);
-    								continue;
-							}
-							std::string ack = "msg sent";
-							send(pfds[i].fd,ack.c_str(),ack.size(),0);
-							std::string receiverName = msg.substr(0,nameIndex);
-							std::string receiverMsg = msg.substr(nameIndex+1,senderIndex-nameIndex-1);
-							if(clientMp.find(receiverName) != clientMp.end()) {
-								std::string sender = msg.substr(senderIndex+1);
-								std::string finalMsg = sender+": "+ receiverMsg;
-								send(clientMp[receiverName],finalMsg.c_str(),finalMsg.size(),0);
+							std::array<std::string, 4> packetDetails;
+							getPacketDetails(packet,packetDetails);
+
+							/* PacketDetails
+							 * index 0 - sender
+							 * index 1 - receiver
+							 * index 2 - message
+							 * index 3 - timeStamp */
+
+							std::string receiver = packetDetails[1];
+	
+							if(clientMp.find(receiver) != clientMp.end()) {
+								std::string finalMsg = packetDetails[0]+": "+packetDetails[2]+" "+packetDetails[3];
+								send(clientMp[receiver],finalMsg.c_str(),finalMsg.size(),0);
+								std::string ack = "msg sent";
+								send(pfds[i].fd,ack.c_str(),ack.size(),0);
 							}
 							else {
 								std::string err = "user not found";
